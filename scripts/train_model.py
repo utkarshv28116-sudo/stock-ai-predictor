@@ -6,7 +6,7 @@ import pickle
 import tensorflow as tf
 from tensorflow import keras
 
-print("SCRIPT STARTED!")
+
 
 def build_lstm_model(input_shape):
     """Build LSTM model for stock price prediction"""
@@ -26,19 +26,18 @@ def build_lstm_model(input_shape):
 
 def prepare_data(df, lookback=60):
     """
-    Prepare data for LSTM training
-    
-    Args:
-        df: DataFrame with stock data
-        lookback: number of days to look back
-    
-    Returns:
-        X_train, X_test, y_train, y_test, scaler
+    Prepare data with MULTIPLE features
     """
-    # Get close prices
+    # Create technical indicators
+    df['MA_20'] = df['Close'].rolling(window=20).mean()  # Moving average
+    df['MA_50'] = df['Close'].rolling(window=50).mean()
+    df['RSI'] = calculate_rsi(df['Close'], 14)  # Relative Strength Index
+    df['Volume_Change'] = df['Volume'].pct_change()
+    
+    # Use multiple features, not just Close
     data = df['Close'].values.reshape(-1, 1)
     
-    # Scale data to 0-1
+    # Scale data
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(data)
     
@@ -47,23 +46,33 @@ def prepare_data(df, lookback=60):
     y = []
     
     for i in range(lookback, len(scaled_data)):
-        X.append(scaled_data[i-lookback:i, 0])
-        y.append(scaled_data[i, 0])
+        X.append(scaled_data[i-lookback:i, :])  # All features
+        y.append(scaled_data[i, 0])  # Predict Close price
     
     X = np.array(X)
     y = np.array(y)
-    
-    # Reshape for LSTM [samples, timesteps, features]
-    X = X.reshape(X.shape[0], X.shape[1], 1)
-    
-    # Split into train and test (80/20)
+    X = np.array(X)
+    y = np.array(y)
+
+# ADD THESE LINES HERE:
+# Split into train and test (80/20)
     split = int(0.8 * len(X))
     X_train = X[:split]
     X_test = X[split:]
     y_train = y[:split]
     y_test = y[split:]
-    
+
+
     return X_train, X_test, y_train, y_test, scaler
+
+def calculate_rsi(prices, period=14):
+    """Calculate Relative Strength Index"""
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 def train_stock_model(ticker, epochs=50, batch_size=32):
     """
@@ -87,8 +96,11 @@ def train_stock_model(ticker, epochs=50, batch_size=32):
     print(f"✅ Prepared data: {X_train.shape[0]} training samples, {X_test.shape[0]} test samples")
     
     # Build model
-    model = build_lstm_model((X_train.shape[1], 1))
-    print(f"✅ Built LSTM model")
+    model = build_lstm_model((X_train.shape[1], X_train.shape[2]))  
+    # Use the actual shape from the data
+    input_shape = (X_train.shape[1], X_train.shape[2])
+    print(f"📊 Input shape: {input_shape}")
+    model = build_lstm_model(input_shape)
     
     # Train model
     print(f"\n🚀 Training... (this takes 2-5 minutes)")
@@ -124,19 +136,20 @@ def train_stock_model(ticker, epochs=50, batch_size=32):
     
     return model, scaler
 
-if __name__ == "__main__":
-    # Train models for all stocks
-    tickers = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN']
+tickers = [
+        'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'NVDA', 'TSLA',
+        'NFLX', 'COIN', 'DIS', 'JPM', 'V', 'SPY', 'QQQ', 'VOO','AMD',
+    ]
     
-    print("\n" + "="*60)
-    print("STARTING TRAINING FOR ALL STOCKS")
-    print("="*60)
+print("\n" + "="*60)
+print("STARTING TRAINING FOR ALL STOCKS")
+print("="*60)
     
-    for ticker in tickers:
-        try:
-            train_stock_model(ticker, epochs=20, batch_size=32)
-        except Exception as e:
-            print(f"\n❌ Error training {ticker}: {e}\n")
+for ticker in tickers:
+    try:
+        train_stock_model(ticker, epochs=20, batch_size=32)
+    except Exception as e:
+        print(f"\n❌ Error training {ticker}: {e}\n")
     
     print("\n" + "="*60)
     print("✅ ALL TRAINING COMPLETE!")

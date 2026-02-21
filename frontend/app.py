@@ -15,8 +15,9 @@ st.write("Get AI-powered stock price predictions!")
 
 # Stock selector
 ticker = st.selectbox(
-    "Choose a stock:",
-    ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN']
+    "Choose a Stock:",
+    ['AAPL', 'AMD','GOOGL', 'MSFT', 'AMZN', 'META', 'NVDA', 'TSLA',
+    'NFLX', 'COIN', 'DIS', 'JPM', 'V', 'SPY', 'QQQ', 'VOO']
 )
 
 # Load model and scaler
@@ -96,3 +97,52 @@ else:
         st.write(f"**Volume:** {df['Volume'][-1]:,.0f}")
         st.write(f"**52-Week High:** ${df['Close'].max():.2f}")
         st.write(f"**52-Week Low:** ${df['Close'].min():.2f}")
+        import streamlit as st
+
+# Cache the model loading
+@st.cache_resource
+def load_model_and_scaler(ticker):
+    model_path = f'models/saved_models/lstm_{ticker}.h5'
+    scaler_path = f'models/saved_models/scaler_{ticker}.pkl'
+    
+    if not os.path.exists(model_path):
+        return None, None
+    
+    model = tf.keras.models.load_model(model_path)
+    
+    with open(scaler_path, 'rb') as f:
+        scaler = pickle.load(f)
+    
+    return model, scaler
+
+# Cache stock data fetching
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    df = stock.history(period='3mo')
+    return df
+# Show loading message while app wakes up
+with st.spinner('🚀 Loading AI models... (first visit takes 10 sec)'):
+    import time
+    # Simulate loading time on first visit
+    time.sleep(1)
+# Train models for all stocks
+    tickers = [
+        'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'NVDA', 'TSLA',
+        'NFLX', 'COIN', 'DIS', 'JPM', 'V', 'SPY', 'QQQ', 'VOO'
+    ]
+    
+    print("\n" + "="*60)
+    print("STARTING TRAINING FOR ALL STOCKS")
+    print("="*60)
+    
+    for ticker in tickers:
+        try:
+            train_stock_model(ticker, epochs=20, batch_size=32)  # ← Here it's used!
+        except Exception as e:
+            print(f"\n❌ Error training {ticker}: {e}\n")
+    
+print("\n" + "="*60)
+print("✅ ALL TRAINING COMPLETE!")
+print("="*60)
+st.success('✅ Ready!')
